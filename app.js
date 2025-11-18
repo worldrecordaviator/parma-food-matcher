@@ -1,155 +1,150 @@
-// ============================
-//  LOAD JSON DATA
-// ============================
-async function loadData() {
-    const shamrock = await fetch('./data/shamrock.json').then(r => r.json());
-    const usfoods = await fetch('./data/usfoods.json').then(r => r.json());
-    return { shamrock, usfoods };
+async function loadNDJSON(path) {
+    const res = await fetch(path);
+    const txt = await res.text();
+
+    // Ignore blank lines and parse each line as JSON
+    return txt
+        .trim()
+        .split("\n")
+        .map(line => JSON.parse(line));
 }
 
-// ============================
-//  STATE
-// ============================
 let shamrockItems = [];
 let usfoodsItems = [];
-let matches = {}; // key = shamrockID → usfoodsID OR null
+let matches = {};
+let filterState = "all";
 
-// ============================
-//  LOAD SAVED PROGRESS
-// ============================
-function loadSavedProgress() {
-    const saved = localStorage.getItem("matcher-progress");
-    if (saved) {
-        matches = JSON.parse(saved);
-    }
+// Load saved matches from local storage
+function loadProgress() {
+    const saved = localStorage.getItem("matches");
+    if (saved) matches = JSON.parse(saved);
 }
 
-// ============================
-//  SAVE PROGRESS
-// ============================
+// Save matches to local storage
 function saveProgress() {
-    localStorage.setItem("matcher-progress", JSON.stringify(matches));
-    updateStats();
+    localStorage.setItem("matches", JSON.stringify(matches));
+}
+
+// Load CSV-like JSON (NDJSON)
+async function loadData() {
+    shamrockItems = await loadNDJSON("./data/shamrock.json");
+    usfoodsItems = await loadNDJSON("./data/usfoods.json");
+    loadProgress();
+    updateCounts();
     renderList();
 }
 
-// ============================
-//  CLEAR SAVED PROGRESS
-// ============================
-function clearProgress() {
+// Fuzzy match simple scoring
+function scoreMatch(a, b) {
+    a = a.toLowerCase();
+    b = b.toLowerCase();
+    let score = 0;
+
+    a.split(/[\s,-]+/).forEach(word => {
+        if (b.includes(word)) score++;
+    });
+
+    return score;
+}
+
+function findBestMatches(shamrockDesc) {
+    let scored = usfoodsItems.map(u => ({
+        item: u,
+        score: scoreMatch(shamrockDesc, u.description)
+    }));
+
+    scored = scored.filter(s => s.score > 0);
+    scored.sort((a, b) => b.score - a.score);
+
+    return scored.slice(0, 5);
+}
+
+function updateCounts() {
+    const matched = Object.keys(matches).length;
+    const total = shamrockItems.length;
+    const noMatch = shamrockItems.filter(i => matches[i.id] === null).length;
+    const pending = total - matched - noMatch;
+
+    document.getElementById("count-shamrock").innerText = total;
+    document.getElementById("count-matched").innerText = matched;
+    document.getElementById("count-no-match").innerText = noMatch;
+    document.getElementById("count-pending").innerText = pending;
+}
+
+function renderList() {
+    const list = document.getElementById("list");
+    list.innerHTML = "";
+
+    shamrockItems.forEach(item => {
+        let status = matches[item.id];
+        if (filterState === "matched" && !status) return;
+        if (filterState === "pending" && status !== undefined) return;
+        if (filterState === "nomatch" && status !== null) return;
+
+        const div = document.createElement("div");
+        div.className = "item";
+
+        let html = `<div class="left"><strong>${item.description}</strong></div>`;
+        html += `<div class="right">`;
+
+        if (status === undefined) {
+            // Pending → show match candidates
+            const best = findBestMatches(item.description);
+            if (best.length === 0) {
+                html += `<button onclick="markNoMatch(${item.id})">No Match</button>`;
+            } else {
+                html += best
+                    .map(
+                        b =>
+                            `<button onclick="selectMatch(${item.id}, ${b.item.id})">${b.item.description}</button>`
+                    )
+                    .join("");
+                html += `<button onclick="markNoMatch(${item.id})" class="nomatch">No Match</button>`;
+            }
+        } else if (status === null) {
+            html += `<span class="tag nomatch">No Match</span>`;
+        } else {
+            const u = usfoodsItems.find(x => x.id === status);
+            html += `<span class="tag matched">${u.description}</span>`;
+        }
+
+        html += `</div>`;
+        div.innerHTML = html;
+        list.appendChild(div);
+    });
+}
+
+function selectMatch(shamrockId, usfoodsId) {
+    matches[shamrockId] = usfoodsId;
+    saveProgress();
+    updateCounts();
+    renderList();
+}
+
+function markNoMatch(id) {
+    matches[id] = null;
+    saveProgress();
+    updateCounts();
+    renderList();
+}
+
+function clearSavedProgress() {
     if (confirm("Clear all saved matches?")) {
-        localStorage.removeItem("matcher-progress");
+        localStorage.removeItem("matches");
         matches = {};
+        updateCounts();
         renderList();
-        updateStats();
     }
 }
 
-// ============================
-//  INITIAL AUTO-MATCH LOGIC
-// (simple fuzzy / contains matching)
-// ============================
-function autoMatch() {
-    shamrockItems.forEach(s => {
-        let sdesc = s.description.toLowerCase();
-
-        // already manually matched? skip
-        if (matches[s.id]) return;
-
-        // best possible match (very basic)
-        let best = usfoodsItems.find(u =>
-            u.description.toLowerCase() === sdesc
-        );
-
-        if (!best) {
-            best = usfoodsItems.find(u =>
-                u.description.toLowerCase().includes(sdesc.substring(0, 10))
-            );
-        }
-
-        matches[s.id] = best ? best.id : null;
-    });
+function setFilter(f) {
+    filterState = f;
+    renderList();
 }
 
-// ============================
-//   UPDATE HEADER COUNTS
-// ============================
-function updateStats() {
-    const total = shamrockItems.length;
-    const matched = Object.values(matches).filter(v => v !== null && v !== "").length;
-    const noMatch = Object.values(matches).filter(v => v === null).length;
-    const pending = total - matched - noMatch;
-
-    document.getElementById("stat-shamrock").textContent = total;
-    document.getElementById("stat-matched").textContent = matched;
-    document.getElementById("stat-pending").textContent = pending;
-    document.getElementById("stat-no-match").textContent = noMatch;
-}
-
-// ============================
-//   RENDER LIST
-// ============================
-function renderList(filter = "all") {
-    const container = document.getElementById("item-list");
-    container.innerHTML = "";
-
-    shamrockItems.forEach(item => {
-        const matchId = matches[item.id];
-        const matchObj = usfoodsItems.find(u => u.id == matchId);
-
-        let status =
-            matchId === null ? "no-match" :
-            matchId ? "matched" : "pending";
-
-        if (filter !== "all" && filter !== status) return;
-
-        let div = document.createElement("div");
-        div.className = "item-row";
-
-        div.innerHTML = `
-            <div class="left">${item.description}</div>
-            <div class="right">
-                <select data-id="${item.id}">
-                    <option value="">-- Select --</option>
-                    ${usfoodsItems.map(u =>
-                        `<option value="${u.id}" ${matchId == u.id ? "selected" : ""}>
-                            ${u.description}
-                        </option>`
-                    ).join("")}
-                    <option value="__nomatch__" ${matchId === null ? "selected" : ""}>
-                        ❌ No Match
-                    </option>
-                </select>
-            </div>
-        `;
-
-        container.appendChild(div);
-    });
-
-    // handle select change
-    document.querySelectorAll('select').forEach(sel => {
-        sel.addEventListener("change", event => {
-            const sid = event.target.dataset.id;
-            const val = event.target.value;
-
-            if (val === "__nomatch__") {
-                matches[sid] = null;
-            } else if (val === "") {
-                matches[sid] = "";
-            } else {
-                matches[sid] = parseInt(val);
-            }
-
-            saveProgress();
-        });
-    });
-}
-
-// ============================
-//   EXPORT JSON
-// ============================
 function exportJSON() {
-    const blob = new Blob([JSON.stringify(matches, null, 2)], { type: "application/json" });
+    const data = JSON.stringify(matches, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
     const url = URL.createObjectURL(blob);
 
     const a = document.createElement("a");
@@ -158,19 +153,13 @@ function exportJSON() {
     a.click();
 }
 
-// ============================
-//   EXPORT CSV
-// ============================
 function exportCSV() {
-    let csv = "ShamrockID,ShamrockDescription,USFoodsID,USFoodsDescription\n";
-
-    shamrockItems.forEach(s => {
-        const usID = matches[s.id];
-        const usDesc = usfoodsItems.find(u => u.id == usID)?.description || "";
-
-        csv += `"${s.id}","${s.description}","${usID || ""}","${usDesc}"\n`;
+    const rows = [["shamrock_id", "usfoods_id"]];
+    Object.keys(matches).forEach(id => {
+        rows.push([id, matches[id]]);
     });
 
+    const csv = rows.map(r => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
 
@@ -180,32 +169,22 @@ function exportCSV() {
     a.click();
 }
 
-// ============================
-//   FILTER BUTTONS
-// ============================
-function setupFilters() {
-    document.getElementById("btn-all").onclick = () => renderList("all");
-    document.getElementById("btn-pending").onclick = () => renderList("pending");
-    document.getElementById("btn-matched").onclick = () => renderList("matched");
-    document.getElementById("btn-nomatch").onclick = () => renderList("no-match");
+function importJSONFile() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json";
+    input.onchange = e => {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = () => {
+            matches = JSON.parse(reader.result);
+            saveProgress();
+            updateCounts();
+            renderList();
+        };
+        reader.readAsText(file);
+    };
+    input.click();
 }
 
-// ============================
-//   INIT
-// ============================
-async function init() {
-    loadSavedProgress();
-
-    const data = await loadData();
-    shamrockItems = data.shamrock;
-    usfoodsItems = data.usfoods;
-
-    // initial automatch for items not seen before
-    autoMatch();
-
-    updateStats();
-    setupFilters();
-    renderList("all");
-}
-
-init();
+document.addEventListener("DOMContentLoaded", loadData);
