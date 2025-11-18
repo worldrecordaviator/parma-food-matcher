@@ -18,6 +18,7 @@
         .scroll-area::-webkit-scrollbar { width: 8px; }
         .scroll-area::-webkit-scrollbar-track { background: transparent; }
         .scroll-area::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
+        .btn-primary { @apply bg-blue-600 text-white hover:bg-blue-700; }
     </style>
 </head>
 <body>
@@ -48,6 +49,25 @@ const calculateScore = (str1, str2) => {
     let score = union === 0 ? 0 : (exactMatches / union);
     if (arr1[0] && arr2[0] && arr1[0] === arr2[0]) score += 0.3;
     return score;
+};
+
+const generateAutoMatches = (sItems, uItems) => {
+    const newMatches = {};
+    sItems.forEach(sItem => {
+        let bestScore = 0;
+        let bestMatchId = null;
+        uItems.forEach(uItem => {
+            const score = calculateScore(sItem.desc, uItem.desc);
+            if (score > 0.45 && score > bestScore) { 
+                bestScore = score; 
+                bestMatchId = uItem.id; 
+            }
+        });
+        if (bestMatchId) {
+            newMatches[sItem.id] = bestMatchId;
+        }
+    });
+    return newMatches;
 };
 
 const US_FOODS_RAW = `1,Protein,1843127,"HALIBUT, 2-6 LB FILLET BONELESS-SKINLESS RAW REF WILD",PACKER,10 LBA,$33.88,LB
@@ -598,52 +618,34 @@ const App = () => {
         setUsFoodsItems(usParsed);
         setShamrockItems(shamParsed);
 
-        // Initial Load Strategy
+        // 1. Generate Auto-Matches Immediately (Local)
+        const autoMatches = generateAutoMatches(shamParsed, usParsed);
+        setMatches(autoMatches);
+
+        // 2. Check Cloud (Overwrite if exists)
         if (GOOGLE_SCRIPT_URL) {
-            fetchCloudData(shamParsed, usParsed);
-        } else {
-            const savedMatches = localStorage.getItem('parma_matches');
-            if (savedMatches) setMatches(JSON.parse(savedMatches));
-            else runAutoMatch(shamParsed, usParsed);
+            fetchCloudData(shamParsed, usParsed, autoMatches);
         }
     }, []);
 
-    const runAutoMatch = (sItems, uItems) => {
-        const newMatches = {};
-        sItems.forEach(sItem => {
-            let bestScore = 0;
-            let bestMatchId = null;
-            uItems.forEach(uItem => {
-                const score = calculateScore(sItem.desc, uItem.desc);
-                if (score > 0.45 && score > bestScore) { bestScore = score; bestMatchId = uItem.id; }
-            });
-            if (bestMatchId) newMatches[sItem.id] = bestMatchId;
-        });
-        setMatches(prev => ({...prev, ...newMatches}));
-    };
-
-    useEffect(() => { localStorage.setItem('parma_matches', JSON.stringify(matches)); }, [matches]);
-
     // --- CLOUD ACTIONS ---
-    const fetchCloudData = async (sItems, uItems) => {
+    const fetchCloudData = async (sItems, uItems, localMatches) => {
         if(!GOOGLE_SCRIPT_URL) return;
         setIsLoading(true);
         try {
             const res = await fetch(GOOGLE_SCRIPT_URL);
             const data = await res.json();
             
-            // CRITICAL FIX: If cloud returns empty data (first run), Trigger Auto-Match
             if (Object.keys(data).length > 0) {
-                setMatches(data);
+                setMatches(data); // Use Cloud Data
                 setLastCloudSave(new Date());
             } else {
-                console.log("Cloud empty, running auto-match...");
-                runAutoMatch(sItems, uItems);
+                // Cloud is empty, stick with local auto-matches
+                console.log("Cloud empty, using auto-matches.");
             }
         } catch(err) {
             console.error("Cloud Load Error", err);
-            // Fallback if cloud fails
-            runAutoMatch(sItems, uItems);
+            // Stick with local auto-matches on error
         }
         setIsLoading(false);
     };
@@ -723,7 +725,7 @@ const App = () => {
                     </div>
                 </div>
                 <div className="flex gap-3 items-center">
-                    <button onClick={pushCloudData} disabled={isLoading} className="bg-blue-600 text-white hover:bg-blue-700 px-4 py-2 rounded font-bold flex items-center gap-2 shadow-sm transition">
+                    <button onClick={pushCloudData} disabled={isLoading} className="btn-primary px-4 py-2 rounded font-bold flex items-center gap-2 shadow-sm transition">
                         {isLoading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-cloud-upload-alt"></i>}
                         <span>Save to Cloud</span>
                     </button>
@@ -762,7 +764,7 @@ const App = () => {
                     {selectedItem ? (
                         <>
                             <div className="p-4 bg-white border-b shadow-sm">
-                                <div className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Selected Shamrock Item</div>
+                                <div className="text-[10px] font-bold text-green-600 uppercase tracking-wider mb-1">1. Buying: Shamrock Foods</div>
                                 <h2 className="text-lg font-bold text-slate-900 leading-snug">{selectedItem.desc}</h2>
                                 <div className="flex gap-2 mt-2 text-xs text-slate-500">
                                     <span className="bg-slate-100 px-2 py-1 rounded border">{selectedItem.brand}</span>
@@ -788,7 +790,7 @@ const App = () => {
                                 </div>
                             )}
                             <div className="p-2 bg-slate-100 border-b">
-                                <div className="text-xs font-bold text-slate-400 uppercase px-2 mb-1 mt-1">Search US Foods (Target)</div>
+                                <div className="text-xs font-bold text-blue-500 uppercase px-2 mb-1 mt-1">2. Match against: US Foods</div>
                                 <input type="text" className="w-full p-2 border rounded shadow-sm focus:ring-2 ring-blue-200 outline-none" placeholder="Type to search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                             </div>
                             <div className="scroll-area p-2">
@@ -814,7 +816,7 @@ const App = () => {
 
                 <div className="w-1/3 bg-white flex flex-col">
                     <div className="p-3 border-b bg-slate-50 font-bold text-slate-600 text-sm flex items-center gap-2">
-                         <i className="fas fa-check-double text-slate-400"></i> Completed Matches ({matchCount})
+                         <i className="fas fa-check-double text-slate-400"></i> Final Matches ({matchCount})
                     </div>
                     <div className="scroll-area">
                         {shamrockItems.filter(s => matches[s.id]).map(sItem => {
