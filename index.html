@@ -28,13 +28,95 @@
 const { useState, useEffect, useMemo } = React;
 
 // =================================================================
-//  CONFIGURATION
+//  1. CONFIGURATION
 // =================================================================
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwuMh45s7zApb3p-eR-Sk_Sxk4QQj7y2sQ5MQCVmsk31QfNjnI5CZdAUHMPAGXZte8g/exec"; 
 
-// ==========================================
-// DATA
-// ==========================================
+// =================================================================
+//  2. HELPER FUNCTIONS (Moved to top to prevent ReferenceErrors)
+// =================================================================
+
+// A. CSV Parser for US Foods (Handles quotes and commas)
+const parseUsFoods = (raw) => {
+    if (!raw) return [];
+    return raw.trim().split('\n').map(line => {
+        try {
+            // Regex for lines with quotes: 1,Cat,ID,"DESC",Brand,Pack,Price,Unit
+            const regex = /^(\d+),(.*?),(\d+),"(.*?)",(.*?),(.*?),(\$.*?),/;
+            const match = line.match(regex);
+            
+            if (match) {
+                return {
+                    id: match[3],
+                    desc: match[4],
+                    brand: match[5],
+                    price: match[7],
+                    raw: line
+                };
+            }
+            // Fallback for lines without quotes
+            const parts = line.split(',');
+            if (parts.length > 4) {
+                const id = parts[2];
+                const rawDesc = parts[3] || ""; 
+                const brand = parts[4];
+                const price = parts.length > 2 ? parts[parts.length-2] : "$0.00";
+                
+                return { 
+                    id: id, 
+                    desc: rawDesc.replace(/"/g, ''), 
+                    brand: brand, 
+                    price: price, 
+                    raw: line 
+                };
+            }
+            return null;
+        } catch (e) {
+            return null; 
+        }
+    }).filter(i => i && i.id);
+};
+
+// B. Similarity Scorer
+const calculateScore = (str1, str2) => {
+    if (!str1 || !str2) return 0;
+    const stopWords = ['PACKER', 'BRAND', 'LB', 'OZ', 'CS', 'PK', 'EA', 'GAL', 'CASE', 'BOX', 'BAG', 'FRESH', 'FROZEN', 'REF', 'RAW', 'COOKED', 'IM', 'IMP', 'DOM'];
+    const clean = (s) => s.toUpperCase().replace(/[^A-Z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 2 && !stopWords.includes(w));
+    const set1 = new Set(clean(str1));
+    const set2 = new Set(clean(str2));
+    const arr1 = Array.from(set1);
+    const arr2 = Array.from(set2);
+    let exactMatches = 0;
+    arr1.forEach(w => { if (set2.has(w)) exactMatches++; });
+    const union = new Set([...arr1, ...arr2]).size;
+    let score = union === 0 ? 0 : (exactMatches / union);
+    if (arr1[0] && arr2[0] && arr1[0] === arr2[0]) score += 0.3;
+    return score;
+};
+
+// C. Auto Matcher
+const generateAutoMatches = (sItems, uItems) => {
+    const newMatches = {};
+    sItems.forEach(sItem => {
+        let bestScore = 0;
+        let bestMatchId = null;
+        uItems.forEach(uItem => {
+            const score = calculateScore(sItem.desc, uItem.desc);
+            if (score > 0.45 && score > bestScore) { 
+                bestScore = score; 
+                bestMatchId = uItem.id; 
+            }
+        });
+        if (bestMatchId) {
+            newMatches[sItem.id] = bestMatchId;
+        }
+    });
+    return newMatches;
+};
+
+// =================================================================
+//  3. RAW DATA
+// =================================================================
 const US_FOODS_RAW = `1,Protein,1843127,"HALIBUT, 2-6 LB FILLET BONELESS-SKINLESS RAW REF WILD",PACKER,10 LBA,$33.88,LB
 2,,1469366,"TROUT, RED 8-10 OZ RAW REF",PACKER,5 LBA,$11.86,LB
 3,,4193030,"TROUT, RAINBOW 7-9 FILLET BUTTERFLY BONELESS SKIN-ON RAW FROZEN IMPORTED CH",ENTRE RIOS,10 LB,$98.87,CS
@@ -550,36 +632,27 @@ const SHAMROCK_RAW = `1|0036937|WRAP, FOOD PAPR DRY WAX 12X12 WHT GREASE|PRPKO|C
 213|2510551|[SO] BAG, PLS 12X7X22 WHT T-SHIRT|COMND|CS
 214|4615671|OIL, OLV XVRGN BIB IMP|TRIFS|CS`;
 
-// --- ERROR BOUNDARY COMPONENT ---
+// --- ERROR BOUNDARY ---
 class ErrorBoundary extends React.Component {
     constructor(props) {
         super(props);
         this.state = { hasError: false, error: null, errorInfo: null };
     }
-
-    static getDerivedStateFromError(error) {
-        return { hasError: true };
-    }
-
+    static getDerivedStateFromError(error) { return { hasError: true }; }
     componentDidCatch(error, errorInfo) {
         this.setState({ error: error, errorInfo: errorInfo });
-        console.error("App Crashed:", error, errorInfo);
+        console.error("Crash:", error, errorInfo);
     }
-
     render() {
         if (this.state.hasError) {
             return (
-                <div className="p-10 bg-red-50 text-red-900 h-screen flex flex-col items-center justify-center">
-                    <h1 className="text-3xl font-bold mb-4"><i className="fas fa-bug"></i> Something went wrong.</h1>
-                    <div className="bg-white p-6 rounded shadow-lg border border-red-200 max-w-2xl w-full overflow-auto">
-                        <h2 className="font-bold text-red-600 mb-2">Error:</h2>
-                        <pre className="text-sm bg-slate-100 p-2 rounded mb-4">{this.state.error && this.state.error.toString()}</pre>
-                        <h2 className="font-bold text-slate-600 mb-2">Stack Trace:</h2>
-                        <pre className="text-xs text-slate-500 whitespace-pre-wrap">{this.state.errorInfo && this.state.errorInfo.componentStack}</pre>
-                    </div>
-                    <button onClick={() => window.location.reload()} className="mt-6 bg-red-600 text-white px-6 py-3 rounded font-bold hover:bg-red-700 transition">
-                        Reload Application
-                    </button>
+                <div className="p-10 bg-red-50 h-screen flex flex-col items-center justify-center text-center">
+                    <h1 className="text-2xl font-bold text-red-600 mb-4">Something went wrong.</h1>
+                    <p className="text-slate-600 mb-4">Please check the console or report this error.</p>
+                    <pre className="bg-white p-4 rounded border text-xs text-left max-w-xl overflow-auto mb-4">
+                        {this.state.error && this.state.error.toString()}
+                    </pre>
+                    <button onClick={() => window.location.reload()} className="bg-blue-600 text-white px-6 py-2 rounded font-bold">Reload</button>
                 </div>
             );
         }
@@ -597,7 +670,9 @@ const App = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [lastCloudSave, setLastCloudSave] = useState(null);
 
+    // --- INIT ---
     useEffect(() => {
+        // Parse Data
         const usParsed = parseUsFoods(US_FOODS_RAW);
         const shamParsed = SHAMROCK_RAW.trim().split('\n').map(line => {
             const parts = line.split('|');
@@ -608,23 +683,29 @@ const App = () => {
         setUsFoodsItems(usParsed);
         setShamrockItems(shamParsed);
 
+        // 1. Run Auto-Match Locally
         const autoMatches = generateAutoMatches(shamParsed, usParsed);
         setMatches(autoMatches);
 
+        // 2. Fetch Cloud Data (Overrides local if exists)
         if (GOOGLE_SCRIPT_URL) {
             fetchCloudData(shamParsed, usParsed, autoMatches);
         }
     }, []);
 
+    // --- CLOUD ACTIONS ---
     const fetchCloudData = async (sItems, uItems, localMatches) => {
         if(!GOOGLE_SCRIPT_URL) return;
         setIsLoading(true);
         try {
             const res = await fetch(GOOGLE_SCRIPT_URL);
             const data = await res.json();
+            
             if (Object.keys(data).length > 0) {
                 setMatches(data); 
                 setLastCloudSave(new Date());
+            } else {
+                console.log("Cloud empty, keeping auto-matches.");
             }
         } catch(err) {
             console.error("Cloud Load Error", err);
@@ -651,6 +732,7 @@ const App = () => {
         setIsLoading(false);
     };
 
+    // --- EXPORT ---
     const exportCSV = () => {
         let csvContent = "data:text/csv;charset=utf-8,Shamrock ID,Shamrock Desc,Shamrock Brand,USFoods ID,USFoods Desc,USFoods Price\n";
         shamrockItems.forEach(sItem => {
@@ -670,6 +752,7 @@ const App = () => {
         link.click();
     };
 
+    // --- HANDLERS ---
     const handleSelect = (item) => { setSelectedItem(item); setSearchTerm(""); };
     const handleMatch = (sid, uid) => { setMatches(prev => ({...prev, [sid]: uid})); };
     const handleUnmatch = (sid) => { const m = {...matches}; delete m[sid]; setMatches(m); };
