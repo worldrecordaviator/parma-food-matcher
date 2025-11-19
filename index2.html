@@ -41,7 +41,6 @@ const parseUsFoods = (raw) => {
     if (!raw) return [];
     return raw.trim().split('\n').map(line => {
         try {
-            // Regex to capture: ID, Group, ItemID, "Desc", Brand, PackSize, Price, UOM
             const regex = /^(\d+),(.*?),(\d+),"(.*?)",(.*?),(.*?),(\$.*?),(.*)/;
             const match = line.match(regex);
             if (match) {
@@ -82,26 +81,17 @@ const parseUsFoods = (raw) => {
 
 const calculateScore = (str1, str2) => {
     if (!str1 || !str2) return 0;
-    // Updated Stop Words to be more aggressive against Size/Unit variations
-    const stopWords = ['PACKER', 'BRAND', 'LB', 'OZ', 'CS', 'PK', 'EA', 'GAL', 'CASE', 'BOX', 'BAG', 'FRESH', 'FROZEN', 'REF', 'RAW', 'COOKED', 'IM', 'IMP', 'DOM', 'COUNT', 'AVG', 'LBA', 'W-LID'];
-    
+    const stopWords = ['PACKER', 'BRAND', 'LB', 'OZ', 'CS', 'PK', 'EA', 'GAL', 'CASE', 'BOX', 'BAG', 'FRESH', 'FROZEN', 'REF', 'RAW', 'COOKED', 'IM', 'IMP', 'DOM'];
     const clean = (s) => s.toUpperCase().replace(/[^A-Z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 2 && !stopWords.includes(w));
-    
     const set1 = new Set(clean(str1));
     const set2 = new Set(clean(str2));
-    
     const arr1 = Array.from(set1);
     const arr2 = Array.from(set2);
-    
     let exactMatches = 0;
     arr1.forEach(w => { if (set2.has(w)) exactMatches++; });
-    
     const union = new Set([...arr1, ...arr2]).size;
     let score = union === 0 ? 0 : (exactMatches / union);
-    
-    // Bonus for matching the first word (Category)
     if (arr1[0] && arr2[0] && arr1[0] === arr2[0]) score += 0.3;
-    
     return score;
 };
 
@@ -578,7 +568,6 @@ const App = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [lastCloudSave, setLastCloudSave] = useState(null);
 
-    // --- INIT ---
     useEffect(() => {
         const usParsed = parseUsFoods(US_FOODS_RAW);
         const shamParsed = SHAMROCK_RAW.trim().split('\n').map(line => {
@@ -597,17 +586,14 @@ const App = () => {
         setUsFoodsItems(usParsed);
         setShamrockItems(shamParsed);
 
-        // 1. Run Auto-Match Locally
         const autoMatches = generateAutoMatches(shamParsed, usParsed);
         setMatches(autoMatches);
 
-        // 2. Check Cloud (Overwrite if exists)
         if (GOOGLE_SCRIPT_URL) {
             fetchCloudData(shamParsed, usParsed, autoMatches);
         }
     }, []);
 
-    // --- CLOUD ACTIONS ---
     const fetchCloudData = async (sItems, uItems, localMatches) => {
         if(!GOOGLE_SCRIPT_URL) return;
         setIsLoading(true);
@@ -618,8 +604,6 @@ const App = () => {
             if (Object.keys(data).length > 0) {
                 setMatches(data); 
                 setLastCloudSave(new Date());
-            } else {
-                console.log("Cloud empty, keeping auto-matches.");
             }
         } catch(err) {
             console.error("Cloud Load Error", err);
@@ -653,14 +637,13 @@ const App = () => {
     };
 
     const handleRecalculate = () => {
-        if (confirm("This will erase manual changes and re-run the auto-matcher. Continue?")) {
+        if (confirm("This will erase the saved cloud data and reset to the auto-matcher defaults. Are you sure?")) {
             const autoMatches = generateAutoMatches(shamrockItems, usFoodsItems);
             setMatches(autoMatches);
-            alert("Matches Recalculated! Don't forget to Save to Cloud.");
+            // Optional: You could force a save here, but better to let user verify then save.
         }
     };
 
-    // --- EXPORT ---
     const exportCSV = () => {
         let csvContent = "data:text/csv;charset=utf-8,Shamrock ID,Shamrock Desc,Shamrock Brand,Shamrock Price,USFoods ID,USFoods Desc,USFoods Price\n";
         shamrockItems.forEach(sItem => {
@@ -680,7 +663,6 @@ const App = () => {
         link.click();
     };
 
-    // --- HANDLERS ---
     const handleSelect = (item) => { setSelectedItem(item); setSearchTerm(""); };
     const handleMatch = (sid, uid) => { setMatches(prev => ({...prev, [sid]: uid})); };
     const handleUnmatch = (sid) => { const m = {...matches}; delete m[sid]; setMatches(m); };
@@ -716,7 +698,7 @@ const App = () => {
                     </div>
                 </div>
                 <div className="flex gap-3 items-center">
-                    <button onClick={handleRecalculate} className="text-slate-500 hover:text-blue-600 border border-slate-300 px-3 py-2 rounded flex items-center gap-2 transition">
+                    <button onClick={handleRecalculate} className="text-slate-500 hover:text-blue-600 border border-slate-300 px-3 py-2 rounded flex items-center gap-2 transition shadow-sm text-xs font-bold">
                         <i className="fas fa-sync-alt"></i> Recalculate
                     </button>
                     <button onClick={pushCloudData} disabled={isLoading} className="btn-primary px-4 py-2 rounded font-bold flex items-center gap-2 shadow-sm transition">
