@@ -19,7 +19,6 @@
         .scroll-area::-webkit-scrollbar-track { background: transparent; }
         .scroll-area::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
         .btn-primary { @apply bg-blue-600 text-white hover:bg-blue-700; }
-        .badge { @apply text-[10px] font-bold px-1.5 py-0.5 rounded border; }
     </style>
 </head>
 <body>
@@ -41,17 +40,14 @@ const parseUsFoods = (raw) => {
     if (!raw) return [];
     return raw.trim().split('\n').map(line => {
         try {
-            // Regex to capture: ID, Group, ItemID, "Desc", Brand, PackSize, Price, UOM
-            const regex = /^(\d+),(.*?),(\d+),"(.*?)",(.*?),(.*?),(\$.*?),(.*)/;
+            const regex = /^(\d+),(.*?),(\d+),"(.*?)",(.*?),(.*?),(\$.*?),/;
             const match = line.match(regex);
             if (match) {
                 return {
                     id: match[3],
                     desc: match[4],
                     brand: match[5],
-                    packSize: match[6], // Captured Pack Size
                     price: match[7],
-                    uom: match[8].trim(), // Captured UOM
                     raw: line
                 };
             }
@@ -60,16 +56,12 @@ const parseUsFoods = (raw) => {
                 const id = parts[2];
                 const rawDesc = parts[3] || ""; 
                 const brand = parts[4];
-                const packSize = parts[5];
                 const price = parts.length > 2 ? parts[parts.length-2] : "$0.00";
-                const uom = parts[parts.length-1];
                 return { 
                     id: id, 
                     desc: rawDesc.replace(/"/g, ''), 
                     brand: brand, 
-                    packSize: packSize,
                     price: price, 
-                    uom: uom ? uom.trim() : "",
                     raw: line 
                 };
             }
@@ -113,6 +105,13 @@ const generateAutoMatches = (sItems, uItems) => {
         }
     });
     return newMatches;
+};
+
+// Helper to extract numeric value from price string
+const getPriceValue = (priceStr) => {
+    if (!priceStr) return 0;
+    // Remove '$', commas, and whitespace, then parse
+    return parseFloat(priceStr.replace(/[^0-9.]/g, '')) || 0;
 };
 
 // =================================================================
@@ -725,7 +724,7 @@ const App = () => {
                                 </div>
                                 <div className="flex justify-between mt-1">
                                     <div className="text-xs text-slate-400">{item.brand} #{item.id}</div>
-                                    <div className="text-xs font-bold text-green-700 bg-green-100 px-1 rounded">{item.price} / {item.unit}</div>
+                                    <div className="text-xs font-bold text-green-700">{item.price} / {item.unit}</div>
                                 </div>
                             </div>
                         ))}
@@ -802,12 +801,17 @@ const App = () => {
                         {shamrockItems.filter(s => matches[s.id]).map(sItem => {
                             const uItem = usFoodsItems.find(u => u.id === matches[sItem.id]);
                             if (!uItem) return null;
+
+                            const sPriceVal = getPriceValue(sItem.price);
+                            const uPriceVal = getPriceValue(uItem.price);
+                            const isMoreExpensive = sPriceVal > uPriceVal;
+
                             return (
                                 <div key={sItem.id} className="p-3 border-b group hover:bg-red-50 transition-colors relative text-xs">
                                     <div className="grid grid-cols-2 gap-4 items-start">
                                         <div className="text-slate-700">
                                             <div>{sItem.desc}</div>
-                                            <div className="mt-1 font-bold text-green-600">{sItem.price} / {sItem.unit}</div>
+                                            <div className={`mt-1 font-bold text-green-600 inline-block ${isMoreExpensive ? 'bg-red-100 px-1 -ml-1 rounded' : ''}`}>{sItem.price} / {sItem.unit}</div>
                                         </div>
                                         <div className="text-blue-700 font-medium">
                                             <div>{uItem.desc}</div>
