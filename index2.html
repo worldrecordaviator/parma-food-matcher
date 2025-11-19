@@ -19,6 +19,7 @@
         .scroll-area::-webkit-scrollbar-track { background: transparent; }
         .scroll-area::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
         .btn-primary { @apply bg-blue-600 text-white hover:bg-blue-700; }
+        .badge { @apply text-[10px] font-bold px-1.5 py-0.5 rounded border; }
     </style>
 </head>
 <body>
@@ -40,14 +41,17 @@ const parseUsFoods = (raw) => {
     if (!raw) return [];
     return raw.trim().split('\n').map(line => {
         try {
-            const regex = /^(\d+),(.*?),(\d+),"(.*?)",(.*?),(.*?),(\$.*?),/;
+            // Regex to capture: ID, Group, ItemID, "Desc", Brand, PackSize, Price, UOM
+            const regex = /^(\d+),(.*?),(\d+),"(.*?)",(.*?),(.*?),(\$.*?),(.*)/;
             const match = line.match(regex);
             if (match) {
                 return {
                     id: match[3],
                     desc: match[4],
                     brand: match[5],
+                    packSize: match[6], // Captured Pack Size
                     price: match[7],
+                    uom: match[8].trim(), // Captured UOM
                     raw: line
                 };
             }
@@ -56,12 +60,16 @@ const parseUsFoods = (raw) => {
                 const id = parts[2];
                 const rawDesc = parts[3] || ""; 
                 const brand = parts[4];
+                const packSize = parts[5];
                 const price = parts.length > 2 ? parts[parts.length-2] : "$0.00";
+                const uom = parts[parts.length-1];
                 return { 
                     id: id, 
                     desc: rawDesc.replace(/"/g, ''), 
                     brand: brand, 
+                    packSize: packSize,
                     price: price, 
+                    uom: uom ? uom.trim() : "",
                     raw: line 
                 };
             }
@@ -515,115 +523,6 @@ const US_FOODS_RAW = `1,Protein,1843127,"HALIBUT, 2-6 LB FILLET BONELESS-SKINLES
 187,,6808018,"CONTAINER, PAPER BOARD 16 OZ DOUBLE POLY COATED WHITE W/ LID COMBO CARRY-OU",MONOGRAM,250 EA,$57.19,CS
 188,,6808042,"CONTAINER, PAPER BOARD 32 OZ DOUBLE POLY COATED MEADOWS STOCK PRINT W/ LID",MONOGRAM,250 EA,$74.49,CS
 189,,6924294,"SYRUP, FOUNTAIN GINGER ALE SEAGRAMS 5:1 BAG-IN-BOX",SEAGRAM'S,2.5 GA,$67.49,CS
-190,,4600896,"CANDLE, BIRTHDAY 2.25 WAX ASSORTED COLOR SPIRAL STRIPE",CANDLE LAMP,12/36 EA,$20.83,CS
-191,,2949105,"SCRUBBER, NYLON 6X9 GREEN MEDIUM-DUTY ANTIMICROBIAL PAD",MONOGRAM,20 EA,$8.51,CS
-192,,1703198,"BAG, FOOD STORAGE UTILITY 1 GAL 10X11 PLASTIC CLEAR RESEALABLE 1.75 MIL",MONOGRAM,250 EA,$19.29,CS
-193,,7662968,"TRAY, PET PLASTIC SERVING 16 BLACK ROUND PLATTER CATERING",MONOGRAM,36 EA,$41.39,CS
-194,,7664139,"LID, HIGH DOME TRAY 16 ROUND PET PLASTIC CLEAR",MONOGRAM,36 EA,$38.39,CS
-195,,9516469,"PASTA, PAPPARDELLE 13 SHELF STABLE",PAPPARDELLES,10 LB,$73.65,EA
-196,,5331483,"RICE, ARBORIO RAW SUPERFINO IMPORTED ITALY",RYKOFF SEXTON,4/5 KG,$95.41,CS
-197,,5280185,"WATER, SPARKLING MINERAL GLASS BOTTLE VARIABLE CARBONATED SELTZER",S. PELLEGRINO,24/16.9 OZ,$35.87,CS
-198,,6310338,"WATER, SPARKLING MINERAL GLASS BOTTLE VARIABLE CARBONATED SELTZER",S. PELLEGRINO,12/1 LT,$30.74,CS
-199,,760850,"SPICE, OREGANO LEAF DRIED PLASTIC JUG SHELF STABLE SEASONING",MONARCH,24 OZ,$26.31,CS
-200,,760835,"SPICE, PEPPER BLACK WHOLE PLASTIC JUG",MONARCH,6 LB,$69.87,CS
-201,,760439,"SPICE, PEPPER BLACK WHOLE PLASTIC SHAKER",MONARCH,18 OZ,$17.56,EA
-202,,7372048,"YEAST, BAKER SHELF STABLE INSTANT RED",SAF,20/1 LB,$121.43,CS
-203,,760785,"SPICE, PEPPER BLACK GROUND PLASTIC JUG 20 MESH TABLE/RESTAURANT GRIND",MONARCH,5 LB,$42.85,CS
-204,,5048426,"WALNUT, HALF and PIECE UNSALTED RAW SHELL OFF BULK LIGHT NUT",FISHER,25 LB,$187.45,CS
-205,,4476271,"FLOUR, WHEAT HIGH GLUTEN UNBLEACHED MALTED SIR LANCELOT BAG",SIR LANCELOT,50 LB,$18.92,CS
-206,,4836169,"FILM, PLASTIC 18X2000' ROLL CUTTER BOX FOOD WRAP",MONOGRAM,1 RL,$19.72,CS
-207,,697134,"CUP, PET PLASTIC 12-14 OZ COLD CLEAR",MONOGRAM,420 EA,$40.29,CS
-208,,2951010,"LID, CUP 12-24 OZ FLAT STRAW SLOTTED PET PLASTIC CLEAR",MONOGRAM,12/85 EA,$49.59,CS
-209,,4953340,"COFFEE, BEAN ESPRESSO ROAST BAG CAFFEINATED",RYKOFF SEXTON,6/32 OZ,$162.78,CS
-210,,8751198,"COFFEE, BEAN ESPRESSO WHITE NIGHTS MEDIUM ROAST CAFFEINATED BAG SHELF STABL",DAZBOG COFFEE,2/5 LB,$143.17,CS
-211,,4833935,"FILM, PLASTIC 12X2000' ROLL CUTTER BOX FOOD WRAP",MONOGRAM,1 RL,$12.97,CS
-212,,1333780,"ANCHOVY, FILLET FLAT IN OLIVE OIL TIN SHELF STABLE",RYKOFF SEXTON,12/13 OZ,$180.07,CS
-213,,5771977,"OIL, PAN COATING CANOLA OIL BASED AEROSOL SPRAY TFF",MONARCH,6/17 OZ,$32.75,CS
-214,,8928152,"KIT, CUTLERY SALT-and-PEPPER K-F-S NAP MEDIUMWEIGHT WHITE POLYPROPYLENE PLAST",MONOGRAM,250 EA,$18.97,CS
-215,,2945517,"SUGAR SUB, YELLOW 1GR SS PACKET SPECIAL PRINT SUCRALOSE",MONARCH,2000/1 GR,$28.59,CS
-216,,7686597,"PICK, PRISM PLASTIC BLACK",HANDGARDS,2500 EA,$42.12,CS
-217,,9650802,"GLOVE, NITRILE LARGE POWDER-FREE BLACK AMBIDEXTROUS",MONOGRAM,4/250 EA,$49.09,CS
-218,,3737152,"HONEY, AMBER LIGHT PLASTIC JAR SHELF STABLE",HARVEST VALUE,6/5 LB,$95.67,CS
-219,,5330766,"MIX, DRESSING RANCH BUTTERMILK",MONARCH,18/3.2 OZ,$27.22,CS
-220,,6429302,"JUICE, CRANBERRY DRINK 27% PET PLASTIC BOTTLE SHELF STABLE",THIRSTER,24/10 OZ,$28.96,CS
-221,,8914988,"STRAW, JUMBO 7.75 BLACK UNWRAPPED STANDARD PLASTIC",MONOGRAM,24/500 EA,$43.89,CS
-222,,8916066,"STRAW, SLIM 8 BLACK UNWRAPPED STANDARD PLASTIC",MONOGRAM,10/500 EA,$19.39,CS
-223,,300640,"SYRUP, COLA FOUNTAIN COKE ZERO 5.5:1 BAG-IN-BOX SHELF STABLE",COKE ZERO SUGAR,2.5 GA,$122.59,CS
-224,,3899309,"OIL, OLIVE EXTRA VIRGIN SALAD BAG-IN-BOX SHELF STABLE CORTO",TRULY,10 LT,$134.82,CS
-225,,1176090,"OIL, OLIVE SUNFLOWER EXTRA VIRGIN 51/49 BLEND SALAD and FRYING BAG-IN-BOX SHE",CORTO OLIVE LP,10 LT,$96.37,CS
-226,,9569757,"OIL, RICE BRAN OLIVE AVOCADO GRAPESEED EXTRA VIRGIN SALAD and FRYING BAG-IN-B",LA PADELLA,10 LT,$79.25,CS
-227,,8913592,"STIRRER, POLYPROPYLENE SIP STRAW 5.5 BLACK STANDARD PLASTIC",MONOGRAM,10/1000 EA,$17.99,CS
-228,,5728087,"PASTA, ORECCHIETTE ENRICHED SHELF STABLE IMPORTED ITALY",DE CECCO,12/16 OZ,$42.75,CS
-229,,7878564,"LABEL, MONDAY 2X2 DISSOLVABLE 250 MULTILINGUAL ROLL BLUE",SUPERIOR PRODUCTS,1 RL,$17.59,EA
-230,,7878630,"LABEL, WEDNESDAY 2X2 DISSOLVABLE 250 MULTILINGUAL ROLL PURPLE",SUPERIOR PRODUCTS,1 RL,$17.59,EA
-231,,7878697,"LABEL, SATURDAY 2X2 DISSOLVABLE 250 MULTILINGUAL ROLL ORANGE",SUPERIOR PRODUCTS,1 RL,$17.59,EA
-232,,2543924,"OLIVE, BLACK COUNTRY MIX IMPORTED GREECE",RYKOFF SEXTON,4/4.4 LB,$69.85,CS
-233,,760314,"SEASONING, ITALIAN FLAKE PLASTIC SHAKER SHELF STABLE SPICE",MONARCH,6 OZ,$9.30,EA
-234,,2949121,"SCRUBBER, NYLON 3.5X6 BLUE EXTRA-HEAVY-DUTY POT PAD",MONOGRAM,20 EA,$9.74,CS
-235,,2625510,"JUICE, APPLE 100% CAN SHELF STABLE",THIRSTER,24/7.2 OZ,$26.67,CS
-236,,4624225,"JUICE, ORANGE 100% CAN SHELF STABLE",THIRSTER,24/7.2 OZ,$33.84,CS
-237,,1717942,"BASE, SOUP CLAM PASTE NO MSG PLASTIC JAR SHELF STABLE",MOLLY'S KITCHEN,6/1 LB,$41.92,CS
-238,,1651712,"CORN STARCH, BOX",MONARCH,24/1 LB,$44.45,CS
-239,,4999470,"SALT, KOSHER GROUND COARSE BOX",MONARCH,12/3 LB,$42.33,CS
-240,,2051979,"PASTA, PACCHERI SHELF STABLE IMPORTED ITALY",DE CECCO,12/1 LB,$54.95,CS
-241,,7988341,"GLOVE, NITRILE MEDIUM POWDER-FREE BLACK AMBIDEXTROUS",MONOGRAM,4/250 EA,$40.59,CS
-242,,4577810,"GLOVE, NITRILE X-LARGE POWDER-FREE BLACK AMBIDEXTROUS",MONOGRAM,4/250 EA,$37.59,CS
-243,,4623877,"GLOVE, NITRILE SMALL POWDER-FREE BLACK AMBIDEXTROUS",MONOGRAM,4/250 EA,$44.09,CS
-244,,8392785,"SYRUP, LAVENDER ITALIAN STYLE PLASTIC BOTTLE COFFEE BEVERAGE",MONIN,4/1 LT,$43.97,CS
-245,,445098,"TAPE, THERMAL CASH REGISTER WHITE 3.13X200' PAPER 1 PLY ROLL",MONOGRAM,50 RL,$92.67,CS
-246,,2510956,"RIBBON, INK CASH REGISTER RED/BLACK .5 NYLON",NATIONAL CHECK,6 EA,$23.50,CS
-247,,5329420,"LINER, 60 GAL 38X58 BLACK 1.5 MIL FLAT PACK LOW DENSITY REPROCESSED CAN",MONOGRAM,100 EA,$37.89,CS
-248,,2602739,"LINER, 23 GAL 30X45 BLACK 1.3 MIL CORELESS ROLL LINEAR LOW DENSITY SLIM JIM",MONOGRAM,8/25 EA,$62.69,CS
-249,,859235,"CONTAINER, 32 OZ ROUND 1 CMPT POLYPROPYLENE DELI W/ LID CLEAR HOT/COLD COMB",MONOGRAM,240 EA,$52.09,CS
-250,,7737638,"PAN, STEAMTABLE FOIL 1/2 SIZE 2.5D RECTANGLE ALUMINUM",VALU PLUS,100 EA,$55.59,CS
-251,,7878655,"LABEL, THURSDAY 2X2 DISSOLVABLE 250 MULTILINGUAL ROLL GRAY",SUPERIOR PRODUCTS,1 RL,$17.59,EA
-252,,7878598,"LABEL, TUESDAY 2X2 DISSOLVABLE 250 MULTILINGUAL ROLL YELLOW",SUPERIOR PRODUCTS,1 RL,$17.59,EA
-253,,7317514,"SAUCE, BALSAMIC GLAZE PLASTIC BOTTLE SHELF STABLE",ROLAND,6/12.9 OZ,$42.45,CS
-254,,2394724,"APRON, POLY ADULT WHITE 28X46 EMBOSSED DISPOSABLE PET PLASTIC",NEATGARDS,100 EA,$44.49,CS
-255,,5466183,"BAG, T-SHIRT 11.5X6.5X21 PLASTIC RED WHITE THANK YOU STOCK PRINT CARRY-OUT",VALU PLUS,1000 EA,$26.59,CS
-256,,2880516,"LINER, PAN FOOD 16.38X24.38 PAPER GREASE RESISTANT UNBLEACHED NATURAL",MONOGRAM,1000 EA,$74.99,CS
-257,,5626512,"PASTA, PAPPARDELLE EGG NEST SHELF STABLE IMPORTED ITALY",DE CECCO,12/8.8 OZ,$45.53,CS
-258,,7508453,"PASTA, PAPPARDELLE NEST RAW FROZEN BAG",PAPPARDELLES,26/4.5 OZ,$57.42,CS
-259,,997692,"PASTA, SPAGHETTI 10 SHELF STABLE",HARVEST VALUE,2/10 LB,$25.55,CS
-260,,3327806,"PASTA, PENNE RIGATE SHELF STABLE",ROSELI,2/10 LB,$28.36,CS
-261,,1039385,"PASTA, MEZZE MANICHE BAG SHELF STABLE ORIGINAL",FELICETTI ORIGINALE,24/17.64 OZ,$74.61,CS
-262,,997338,"PASTA, PENNE RIGATE SHELF STABLE",HARVEST VALUE,2/10 LB,$25.48,CS
-263,,1327949,"PASTA, RIGATONI SHELF STABLE",ROSELI,2/10 LB,$29.23,CS
-264,,2327807,"PASTA, LINGUINE 10 SHELF STABLE",ROSELI,2/10 LB,$25.57,CS
-265,,6699000,"PASTA, LASAGNA SMOOTH 8.75X11 SHEET COOKED FROZEN",ROSELI,10 LB,$26.75,CS
-266,,1936335,"PASTA, BUCATINI SHELF STABLE IMPORTED ITALY",DE CECCO,20/1 LB,$56.95,CS
-267,,9178203,"OIL, CANOLA OLIVE EXTRA VIRGIN 90/10 BLEND SALAD and FRYING PLASTIC JUG",SICILIA,6/1 GA,$83.58,CS
-268,,1333970,"OIL, CANOLA OLIVE EXTRA VIRGIN 90/10 BLEND SALAD and FRYING PLASTIC JUG",ROSELI,4/1 GA,$77.84,CS
-269,,8537664,"OIL, OLIVE TRUFFLE WHITE EXTRA VIRGIN IMPORTED SALAD GLASS BOTTLE ARTIFICIA",ROSELI,12/250 ML,$159.60,CS
-270,,4067821,"OIL, OLIVE TRUFFLE WHITE PURE IMPORTED ITALY SALAD GLASS BOTTLE SABATINO TA",SABATINO TARTUFI,6/250 ML,$86.27,CS
-271,,3327053,"SHORTENING, FRYING CANOLA LIQUID CLEAR PLASTIC JUG SHELF STABLE OIL",HARVEST VALUE,35 LB,$37.73,CS
-272,,2064982,"CRUMB, BREAD PANKO PLAIN COARSE BAG",PACIFIC JADE,25 LB,$27.94,CS
-273,,2004844,"FLOUR, WHEAT HIGH GLUTEN BLEACHED BROMATED ENRICHED MALTED ALL TRUMPS BAG",GOLD MEDAL,50 LB,$19.87,CS
-274,,4330965,"FLOUR, WHEAT RED HIGH GLUTEN FINE BLEACHED BROMATED ENRICHED PREMIUM BAG",MONARCH,50 LB,$18.31,CS
-275,,1025259,"COCOA, BAKING DARK POWDER ALKALI 100% CACAO BAG CHOCOLATE",CACAO BARRY,6/1 KG,$195.77,CS
-276,,2370328,"COCOA, BAKING NATURAL POWDER 10-12% BUTTERFAT CHOCOLATE",MONARCH,6/5 LB,$277.08,CS
-277,,5137153,"COOKIE, LADY FINGER TIRAMISU IMPORTED FRANCE SS",ROLAND,20/15 EA,$33.88,CS
-278,,7521909,"OLIVE, KALAMATA WEDGE BAG-IN-BOX",ROLAND,2/6.5 LB,$89.19,CS
-279,,7463482,"OLIVE, KALAMATA PITTED SHELF STABLE PLASTIC BOTTLE",MONARCH,4/1.5 KG,$68.29,CS
-280,,7696709,"OLIVE, ASSORTED PITTED IMPORTED GREECE SHELF STABLE ANTIPASTO MIX",RYKOFF SEXTON,2/5 LB,$68.77,CS
-281,,3333705,"OLIVE, MANZANILLA GREEN STUFFED PIMIENTO 300-320 COUNT SHELF STABLE GLASS J",MONARCH,4/1 GA,$88.45,CS
-282,,2333599,"CAPER, NONPAREIL JAR",RYKOFF SEXTON,6/32 OZ,$86.99,CS
-283,,5019583,"TOMATO, GROUND PEELED IN EXTRA-HEAVY PUREE CANNED",TOMATO MAGIC,6/#10 CN,$41.06,CS
-284,,7058803,"TOMATO, WHOLE PLUM W/ BASIL IN JUICE PEELED CANNED ROMA",ALTA CUCINA,6/#10 CN,$35.88,CS
-285,,2051209,"TOMATO, PASTE 26% LIGHT NATURAL GMO FREE CANNED CALIFORNIA",HUNTS,24/12 OZ,$66.50,CS
-286,,2329431,"TOMATO, PASTE 26% LIGHT CANNED CALIFORNIA FANCY",ROSELI,6/#10 CN,$59.66,CS
-287,,2068781,"VINEGAR, WINE WHITE PLASTIC",FOUR MONKS,4/1 GA,$54.40,CS
-288,,3719272,"CRUST, PIZZA WHITE 12 HAND TOSSED VEGAN GLUTEN-FREE PARBAKED FROZEN",SWEET ESCAPE PASTRIES,4/12.75 OZ,$20.16,CS
-289,,2497253,"POTATO, MASHED SKINLESS YUKON GOLD SEASONED BOIL IN BAG FROZEN",LAMBS SUPREME,6/4 LB,$62.60,CS
-290,,4072674,"SHELL, CANNOLI 5 COOKED BAKED FROZEN BULK LARGE",SPECIAL TOUCH,48/1 OZ,$44.56,CS
-291,,761072,"SPICE, PEPPER RED CRUSHED PLASTIC JUG SHELF STABLE SEASONING",MONARCH,3.75 LB,$53.65,CS
-292,,5826920,"TOPPING, CHOCOLATE LIQUID SHELF STABLE SYRUP",RITUALS,12/24 OZ,$43.93,CS
-293,,5333711,"OLIVE, GREEN QUEEN STUFFED W/ PIMIENTO 100-120 COUNT GLASS JAR SHELF STABLE",MONARCH,4/1 GA,$154.45,CS
-294,,7128317,"CAPER, CAPOTE IMPORTED SPAIN GLASS BRINE",ROLAND,6/32 OZ,$60.57,CS
-295,,760793,"SPICE, BAY LEAF WHOLE DRIED PLASTIC JUG SHELF STABLE SEASONING",MONARCH,12 OZ,$23.94,EA
-296,,3522208,"CHERRY, AMARENA IN SYRUP CANNED",ROLAND,2 EA,$125.39,CS
-297,,5309026,"GIARDINIERA, HOT PAIL REF",CHIPICO PICKLES,2 GA,$116.27,CS
-298,,3365814,"SYRUP, FOUNTAIN PIBB XTRA BAG-IN-BOX",MR. PIBB,5 GA,$129.40,CS
 299,,2424273,"SYRUP, VANILLA ITALIAN STYLE PLASTIC BOTTLE COFFEE BEVERAGE",MONIN,4/1 LT,$46.78,CS`;
 
 // --- ERROR BOUNDARY ---
@@ -669,7 +568,7 @@ const App = () => {
         // Parse Data
         const usParsed = parseUsFoods(US_FOODS_RAW);
         
-        // Corrected Parsing for Shamrock Data
+        // UPDATE: Parse Shamrock to include Price
         const shamParsed = SHAMROCK_RAW.trim().split('\n').map(line => {
             const parts = line.split('|');
             if(parts.length < 3) return null;
@@ -686,11 +585,9 @@ const App = () => {
         setUsFoodsItems(usParsed);
         setShamrockItems(shamParsed);
 
-        // 1. Run Auto-Match Locally
         const autoMatches = generateAutoMatches(shamParsed, usParsed);
         setMatches(autoMatches);
 
-        // 2. Fetch Cloud Data (Overrides local if exists)
         if (GOOGLE_SCRIPT_URL) {
             fetchCloudData(shamParsed, usParsed, autoMatches);
         }
@@ -720,7 +617,6 @@ const App = () => {
         if(!GOOGLE_SCRIPT_URL) { alert("Config Error"); return; }
         setIsLoading(true);
         try {
-            // Use Form Submission to bypass CORS
             const formData = new URLSearchParams();
             formData.append("payload", JSON.stringify(matches));
 
@@ -861,8 +757,8 @@ const App = () => {
                                             <div className="bg-white p-3 rounded border border-blue-200 shadow-sm">
                                                 <div className="font-bold text-slate-800">{mItem.desc}</div>
                                                 <div className="text-xs text-slate-500 mt-1 flex justify-between">
-                                                    <span>{mItem.brand}</span>
-                                                    <span className="font-bold text-blue-600">{mItem.price}</span>
+                                                    <span>{mItem.brand} <span className="ml-1 text-slate-400">{mItem.packSize}</span></span>
+                                                    <span className="font-bold text-blue-600">{mItem.price} <span className="text-[10px] text-slate-400 font-normal">{mItem.uom}</span></span>
                                                 </div>
                                             </div>
                                         ) : <div className="text-red-500">Item Data Missing</div>
@@ -879,8 +775,8 @@ const App = () => {
                                         className={`p-3 mb-2 bg-white rounded border shadow-sm cursor-pointer hover:ring-2 hover:ring-blue-400 suggestion-hover ${matches[selectedItem.id] === uItem.id ? 'ring-2 ring-green-500 bg-green-50' : ''}`}>
                                         <div className="font-medium text-slate-800">{uItem.desc}</div>
                                         <div className="flex justify-between mt-2 text-xs text-slate-500">
-                                            <span>{uItem.brand}</span>
-                                            <span className="font-bold text-slate-700">{uItem.price} <span className="ml-2 text-[10px] bg-slate-200 px-1 rounded">US Foods</span></span>
+                                            <span>{uItem.brand} <span className="ml-1 badge bg-slate-100 border-slate-300">{uItem.packSize}</span></span>
+                                            <span className="font-bold text-slate-700">{uItem.price} <span className="text-[10px] text-slate-400 font-normal">{uItem.uom}</span></span>
                                         </div>
                                     </div>
                                 ))}
@@ -911,11 +807,11 @@ const App = () => {
                                     <div className="grid grid-cols-2 gap-4 items-start">
                                         <div className="text-slate-700">
                                             <div>{sItem.desc}</div>
-                                            <div className="mt-1 font-bold text-green-600">{sItem.price}</div>
+                                            <div className="mt-1 font-bold text-green-600">{sItem.price} / {sItem.unit}</div>
                                         </div>
                                         <div className="text-blue-700 font-medium">
                                             <div>{uItem.desc}</div>
-                                            <div className="mt-1 font-bold text-blue-600">{uItem.price}</div>
+                                            <div className="mt-1 font-bold text-blue-600">{uItem.price} / {uItem.uom} <span className="text-slate-400 font-normal ml-1">({uItem.packSize})</span></div>
                                         </div>
                                     </div>
                                     <button onClick={(e) => { e.stopPropagation(); handleUnmatch(sItem.id); }} className="absolute top-1 right-1 text-red-300 hover:text-red-600 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
